@@ -1,87 +1,106 @@
 import numpy as np
 
-def compute_dist_matrix(data):
+
+def compute_distance_matrix(data):
     """
-    Compute full pairwise Euclidean distance matrix for data.
-    data: (n, d) array
-    Returns: (n, n) distance matrix
+    Compute pairwise Euclidean distance matrix.
     """
-    # Efficient: ||x-y||^2 = ||x||^2 + ||y||^2 - 2 x·y
-    squared_norms = np.sum(data**2, axis=1, keepdims=True)  # (n,1)
-    dist_sq = squared_norms + squared_norms.T - 2 * (data @ data.T)
-    np.maximum(dist_sq, 0, out=dist_sq)  # numerical safety
+    sq_norms = np.sum(data ** 2, axis=1).reshape(-1, 1)
+    dist_sq = sq_norms + sq_norms.T - 2 * data @ data.T
+    np.maximum(dist_sq, 0, out=dist_sq)
     return np.sqrt(dist_sq)
 
-def cluster_distance(group1, group2, dist_matrix, method="average"):
-    """
-    Compute distance between two clusters given base pairwise matrix.
-    group1, group2: lists of point indices
-    dist_matrix: (n, n) distance matrix
-    method: 'single' | 'complete' | 'average'
-    """
-    idx1 = np.array(group1)
-    idx2 = np.array(group2)
-    submatrix = dist_matrix[np.ix_(idx1, idx2)]
-    if method == "single":
-        return np.min(submatrix)
-    elif method == "complete":
-        return np.max(submatrix)
-    elif method == "average":
-        return np.mean(submatrix)
-    else:
-        raise ValueError("Unsupported linkage: " + str(method))
 
-def hierarchical_clustering(data, num_clusters=2, method="average"):
+def ward_distance(cluster_a, cluster_b, data):
     """
-    Bottom-up agglomerative clustering.
-    data: (n, d) array
-    num_clusters: desired number of clusters (1 <= num_clusters <= n)
-    method: 'single' | 'complete' | 'average'
-    Returns: list of clusters (each cluster is a list of point indices),
-             and np.array of labels (n,)
+    Compute Ward linkage distance between two clusters.
+    """
+    A = data[cluster_a]
+    B = data[cluster_b]
+
+    mean_A = np.mean(A, axis=0)
+    mean_B = np.mean(B, axis=0)
+    mean_AB = np.mean(np.vstack([A, B]), axis=0)
+
+    n_A = len(A)
+    n_B = len(B)
+
+    # Increase in within-cluster sum of squares
+    return (
+        n_A * np.sum((mean_A - mean_AB) ** 2)
+        + n_B * np.sum((mean_B - mean_AB) ** 2)
+    )
+
+
+def linkage_distance(cluster_a, cluster_b, dist_matrix, data, linkage):
+    """
+    Compute distance between two clusters using linkage criteria.
+    """
+    if linkage == "ward":
+        return ward_distance(cluster_a, cluster_b, data)
+
+    distances = dist_matrix[np.ix_(cluster_a, cluster_b)]
+
+    if linkage == "single":
+        return np.min(distances)
+    elif linkage == "complete":
+        return np.max(distances)
+    elif linkage == "average":
+        return np.mean(distances)
+    else:
+        raise ValueError(f"Unsupported linkage: {linkage}")
+
+
+def agglomerative_hierarchical_clustering(data, linkage="average"):
+    """
+    Full agglomerative hierarchical clustering algorithm.
+
+    Parameters:
+        data (np.ndarray): Shape (n_samples, n_features)
+        linkage (str): 'single', 'complete', 'average', or 'ward'
+
+    Returns:
+        merges (np.ndarray): Merge history for dendrogram
     """
     n_samples = data.shape[0]
-    if num_clusters < 1 or num_clusters > n_samples:
-        raise ValueError("num_clusters must satisfy 1 <= num_clusters <= n")
+    dist_matrix = compute_distance_matrix(data)
 
-    # Start with singleton clusters
-    groups = [[i] for i in range(n_samples)]
-    dist_matrix = compute_dist_matrix(data)
+    clusters = {i: [i] for i in range(n_samples)}
+    next_cluster_id = n_samples
+    merges = []
 
-    # Repeatedly merge two closest clusters
-    while len(groups) > num_clusters:
-        best_val = np.inf
-        best_pair = None
-        for i in range(len(groups)):
-            for j in range(i + 1, len(groups)):
-                d_val = cluster_distance(groups[i], groups[j], dist_matrix, method)
-                # Deterministic tie-breaking using indices
-                if (d_val < best_val) or (
-                    d_val == best_val and best_pair is not None and (i, j) < best_pair
-                ):
-                    best_val = d_val
-                    best_pair = (i, j)
-        # Merge the best pair
-        i, j = best_pair
-        groups[i].extend(groups[j])
-        del groups[j]
+    while len(clusters) > 1:
+        min_dist = np.inf
+        pair_to_merge = None
 
-    # Produce labels
-    labels = np.empty(n_samples, dtype=int)
-    for cid, grp in enumerate(groups):
-        for idx in grp:
-            labels[idx] = cid
+        cluster_ids = list(clusters.keys())
 
-    return groups, labels
+        for i in range(len(cluster_ids)):
+            for j in range(i + 1, len(cluster_ids)):
+                c1, c2 = cluster_ids[i], cluster_ids[j]
 
-if __name__ == "__main__":
-    # Example: synthetic 2D data with three groups
-    rng = np.random.default_rng(42)
-    cluster1 = rng.normal(loc=(2.0, 2.0), scale=0.3, size=(20, 2))
-    cluster2 = rng.normal(loc=(6.0, 6.0), scale=0.3, size=(20, 2))
-    cluster3 = rng.normal(loc=(2.0, 6.0), scale=0.3, size=(20, 2))
-    dataset = np.vstack([cluster1, cluster2, cluster3])
+                d = linkage_distance(
+                    clusters[c1],
+                    clusters[c2],
+                    dist_matrix,
+                    data,
+                    linkage
+                )
 
-    groups, labels = hierarchical_clustering(dataset, num_clusters=3, method="average")
-    print("Cluster sizes:", [len(g) for g in groups])
-    print("Labels (first 10):", labels[:10])
+                if d < min_dist:
+                    min_dist = d
+                    pair_to_merge = (c1, c2)
+
+        c1, c2 = pair_to_merge
+
+        new_cluster = clusters[c1] + clusters[c2]
+        clusters[next_cluster_id] = new_cluster
+
+        merges.append([c1, c2, min_dist, len(new_cluster)])
+
+        del clusters[c1]
+        del clusters[c2]
+
+        next_cluster_id += 1
+
+    return np.array(merges)
