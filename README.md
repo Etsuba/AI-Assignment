@@ -35,7 +35,7 @@ Change the linkage method by setting the `linkage` parameter:
 merges = agglomerative_hierarchical_clustering(dataset, linkage="ward")
 ```
 
-Outputs include **cluster labels** and **dendrogram plots**.
+Outputs include **cluster labels**.
 
 ---
 
@@ -46,8 +46,3 @@ Outputs include **cluster labels** and **dendrogram plots**.
 3. Ward, J. H. (1963). *Hierarchical grouping to optimize an objective function.* Journal of the American Statistical Association, 58(301), 236–244.
 4. SciPy Hierarchical Clustering Documentation: [https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html](https://docs.scipy.org/doc/scipy/reference/cluster.hierarchy.html)
 
----
- 
-
-Do you want me to do that?
-```
