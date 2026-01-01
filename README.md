@@ -18,7 +18,8 @@ A simple, from-scratch implementation of **agglomerative hierarchical clustering
 2. Install dependencies:
 
 ```bash
-pip install numpy 
+pip install numpy matplotlib scipy
+
 ```
 
 ## Usage
@@ -26,7 +27,7 @@ pip install numpy
 Run the main script to generate synthetic data and perform clustering:
 
 ```bash
-python assignment.py
+python hierarchical-clustering.py
 ```
 
 Change the linkage method by setting the `linkage` parameter:
